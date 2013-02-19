@@ -8,23 +8,34 @@ var app = express();
 app.configure(function() {
     app.set('views', __dirname + '/views');
     app.set('view engine', 'jade');
-
-    app.use(express.methodOverride());
+    app.use(express.bodyParser()),
+    //app.use(express.methodOverride());
     app.use(app.router);
     app.use(express.static(path.join(__dirname, 'public')));
 });
 
-app.configure('development', function() {
-    app.use(express.errorHandler());
-});
-
-app.put('/products/attachments/:id', function(req, res) {
-    console.log("Going on")
-   
-        console.log(req.params)
-    req.on("data", function(chunk) {
-        console.log(chunk.toString())
-    })
+app.put('/products/:id', function(req, res) {
+    console.log(req.body)
+database.save(req.body,
+        function(error, doc) {
+console.log(error, doc)
+        });
+    /*console.log(req.params.rev)
+    req.pipe(
+    database.saveAttachment({
+        id: req.params.product_id,
+        rev: "",
+    }, {
+        name: req.params.id,
+        contentType: req.headers["content-type"]
+    }, function(error, doc) {
+        console.log(error, doc)
+        res.json({
+            id: req.params.id,
+            rev: doc.rev,
+            content_type: req.headers["content-type"]
+        })
+    }))
     /*  database.save("bopopo", {
         name: "deedee",
         "_attachments": {
@@ -39,14 +50,5 @@ console.log(error, doc)
         });
 */
 })
-
-
-// db.saveAttachment({ _id: req.params.product, _rev: req.body.rev}, 
-//db.save(id, {
-//    _attachments: collated,
-//    type: "product"
-//}, function(err, doc) {
-//    console.log(err, doc)
-//})
 
 http.createServer(app).listen(process.env.PORT);

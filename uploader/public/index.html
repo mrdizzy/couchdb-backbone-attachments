@@ -16,8 +16,7 @@
                     urlRoot: "/products"
                 });
                 var product = new Product({
-                    "_id": "eloquence-name_place",
-                    "_rev": "45-cdc938e06e1c43598730833e9334a8ff",
+                    "_id": "belinda",
                     "type": "product",
                     "colours": ["MidnightBlue"],
                     "attachments_order": ["large-3", "display-3", "medium-3", "thumb-3", "large-4", "display-4"],
@@ -78,8 +77,16 @@
                 })
 
                 var ProductView = Backbone.View.CouchDB.extend({
+                    events:  {
+                        "click input[type=submit]": "saveProduct"
+                    },
+                    saveProduct: function() {
+                       var xhr = this.model.save();
+                       console.log(xhr)
+                    },
                     render: function() {
                         this.$el.html(this.buildAttachments(AttachmentView))
+                        this.$el.append('<input type="submit"></input>')
                         return this;
                     }
                 });
