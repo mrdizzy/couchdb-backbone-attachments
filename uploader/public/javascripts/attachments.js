@@ -21,7 +21,6 @@ Backbone.Model.Attachment = Backbone.Model.extend({
             if(success) success(model,resp,options);
             model.trigger('sync',model.resp,options);
         }
-        
         if (method === "update") {
             $.ajax(options);
         }

@@ -1,9 +1,9 @@
-var initialize = {
+var productJSON = {
     "_id": "eloquence-name_place",
     "_rev": "45-cdc938e06e1c43598730833e9334a8ff",
     "type": "product",
     "colours": ["MidnightBlue"],
-    "attachments_order": ["large-3", "display-3", "medium-3", "thumb-3", "large-4", "display-4"],
+    "attachments_order": ["large-3", "display-3", "medium-3"],
     "_attachments": {
         "large-3": {
             "content_type": "image/png",
@@ -25,83 +25,75 @@ var initialize = {
             "digest": "md5-wER52KdJVAWQ7Gu4wvnDPw==",
             "length": 68409,
             "stub": true
-        },
-        "thumb-3": {
-            "content_type": "image/png",
-            "revpos": 38,
-            "digest": "md5-wXGFsQ+flSyxLS2JpBWLbw==",
-            "length": 6987,
-            "stub": true
-        },
-        "large-4": {
-            "content_type": "image/png",
-            "revpos": 35,
-            "digest": "md5-zP+J4mlYcb39UVSs1llb5w==",
-            "length": 111961,
-            "stub": true
-        },
-        "display-4": {
-            "content_type": "image/png",
-            "revpos": 34,
-            "digest": "md5-7AshZy8eilrPdEFApt1hmA==",
-            "length": 37868,
-            "stub": true
         }
     }
 };
 
+/*
+ Call the onload method when you want to emulate a file upload
+ fileReader.onload({
+            target: {
+                result: "base64,hereissomedata"
+            }
+        });
+        */
+
+var file = {
+    name: "david.txt",
+    type: "text/plain"
+}
+
 describe("Attachments", function() {
-    var attach;
+    var product;
 
     beforeEach(function() {
-
-        jasmine.Ajax.useMock();
-
         var Product = Backbone.Model.CouchDB.extend({
             urlRoot: "/products"
         });
-        attach = new Product(initialize, {parse:true});
-        console.log(attach)
-
-        var AttachmentView = Backbone.View.extend({
-            tagName: 'li',
-            events: {
-                'click .remove': 'removeAttachment'
-            },
-            removeAttachment: function() {
-                this.model.destroy();
-            },
-            render: function() {
-                this.$el.html(this.model.id + " <a class='remove'>Remove</a>");
-                return this;
-            }
+        product = new Product(productJSON, {
+            parse: true
         })
-
-        var ProductView = Backbone.View.CouchDB.extend({
-            events: {
-                'click #add': 'addAttachment'
-            },
-            render: function() {
-                this.$el.html(this.buildAttachments(AttachmentView));
-                this.$el.append("<p id='add'>Add</p>")
-                return this;
-            }
-        });
-        var pv = new ProductView({
-            model: attach
-        }).render().$el;
-
     });
-    // Any CouchDB docs with attachments must also have attachments_order field which is an array
-    // containing the order in which to display the attachments
 
-    it("should be able to play a Song", function() {
-
-   attach.updateAttachmentsOrder("boo")
-        request = mostRecentAjaxRequest();
-        console.log(request)
-     
-
+    it("should have an Attachments collection", function() {
+        expect(product.get("_attachments").length).toEqual(3);
     });
+
+    it("should have an Attachment with the correct url", function() {
+        expect(product.get("_attachments").at(0).url()).toEqual('/products/eloquence-name_place/attachments/large-3')
+    })
+
+
+
+    it("should update the Attachment's content_type attribute when adding a file", function() {
+        var attachment = product.get("_attachments").at(0);
+        expect(attachment.get("content_type")).toBe("image/png")
+        attachment.updateBinary(file);
+        expect(attachment.get("content_type")).toBe("text/plain")
+    })
 
 });
+
+describe("Saving Attachments", function() {
+    var fileReader = {
+        readAsDataURL: function() {}
+    }
+
+    beforeEach(function() {
+        var Product = Backbone.Model.CouchDB.extend({
+            urlRoot: "/products"
+        });
+        product = new Product(productJSON, {
+            parse: true
+        })
+        spyOn(window, 'FileReader').andReturn(fileReader);
+    })
+
+    it("should save with no Attachments when no files have been added", function() {
+        jasmine.Ajax.useMock();
+        product.save();
+        var request = mostRecentAjaxRequest();
+        expect(Object.keys(JSON.parse(request.params)._attachments).length).toEqual(0)
+    })
+    it("")
+})
