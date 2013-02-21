@@ -37,7 +37,6 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
         "_attachments": new Backbone.Collection.Attachments,
         "attachments_order": []
     },
-
     // We overwrite the parse function as when attachments come down the 
     // wire we need to parse them out into a separate Backbone collection
     // and make each attachment a Backbone model
@@ -54,7 +53,6 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
                 length: list[key].length
             }
         })
-        console.log(resp._attachments)
         var parsed_attachments = _.map(resp._attachments, function(value, key, list) {
             return {
                 id: key,
@@ -67,7 +65,7 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
         }
         else {
             resp._attachments = new Backbone.Collection.Attachments(parsed_attachments)
-            
+
         }
         resp._attachments.url = this.url() + "/" + resp._id + "/attachments"
         return resp;
@@ -82,37 +80,39 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
         });
     },
     sync: function() {
-       var xhr, args = arguments;
-       
-       // Because the FileReader API is asynchronous we have to use a callback
-       // style to call Backbone.sync when the files have been read
-       this.saveForCouchDB(function(attrs) {
-           args[2].attrs = attrs; // args[2] is the options object from arguments
-           xhr = Backbone.sync.apply(this, args);
-       })
-      return xhr;
+        var xhr, args = arguments;
+
+        // Because the FileReader API is asynchronous we have to use a callback
+        // style to call Backbone.sync when the files have been read
+        this.saveForCouchDB(function(attrs) {
+            args[2].attrs = attrs; // args[2] is the options object from arguments
+            xhr = Backbone.sync.apply(this, args);
+        })
+        return xhr;
     },
     // We override the toJSON function as this is what Backbone.sync uses to 
     // save our model to the server.
     saveForCouchDB: function(callback) {
-        var json = _.clone(this.attributes);   
+        var json = _.clone(this.attributes);
         json._attachments = {};
         var attachments = this.get("_attachments").filter(function(attachment) {
-            
             return attachment.get("binary");
         });
         // If no files have been added to the model then we return straight away
         if (attachments.length === 0) {
-            callback(json) 
+            callback(json)
             return;
         }
         // We need to use a counter as loading of the files is asynchronous
         // and we do not want to return until they are all loaded
         var counter = 0;
+        console.log(attachments);
         _.each(attachments, function(attachment) {
 
             var fReader = new FileReader();
+            console.log(fReader)
             fReader.onload = function(event) {
+
                 counter++;
                 var data = event.target.result.split(",")[1];
                 json._attachments[attachment.id] = {
@@ -120,7 +120,7 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
                     data: data
                 }
                 if (counter == attachments.length) {
-                   console.log(json)
+
                     callback(json);
                 }
             }
@@ -141,6 +141,7 @@ function makeDroppable(el, model) {
     // and then get the file, set the binary data of the attachment
     // and save it
     el.addEventListener('drop', function(e) {
+        console.log("DROPPED")
         e.preventDefault();
         var file = e.dataTransfer.files[0];
 
@@ -189,7 +190,6 @@ Backbone.View.Attachments = Backbone.View.extend({
 
 // VIEW 
 // CouchDB Model
-//
 
 Backbone.View.CouchDB = Backbone.View.extend({
     // 
@@ -200,11 +200,11 @@ Backbone.View.CouchDB = Backbone.View.extend({
     // Extend this view and then call buildAttachments(view) from within the 
     // extended view's render() method, passing it an extended Backbone view
     // to render each individual attachment. 
-    buildAttachments: function(view) {
+    buildAttachments: function() {
         var that = this;
         var rendered_view = new Backbone.View.Attachments({
             model: this.model,
-            view: view
+            view: that.options.attachmentView
         })
         var element = rendered_view.render().$el
         element.sortable({

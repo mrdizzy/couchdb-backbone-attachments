@@ -43,6 +43,12 @@ var file = {
     type: "text/plain"
 }
 
+var file2 = {
+    name: "emily.jpg",
+    type: "image/jpeg"
+}
+
+
 describe("Attachments", function() {
     var product;
 
@@ -63,8 +69,6 @@ describe("Attachments", function() {
         expect(product.get("_attachments").at(0).url()).toEqual('/products/eloquence-name_place/attachments/large-3')
     })
 
-
-
     it("should update the Attachment's content_type attribute when adding a file", function() {
         var attachment = product.get("_attachments").at(0);
         expect(attachment.get("content_type")).toBe("image/png")
@@ -75,10 +79,71 @@ describe("Attachments", function() {
 });
 
 describe("Saving Attachments", function() {
-    var fileReader = {
-        readAsDataURL: function() {}
-    }
 
+    // mock FileReader as we don't want to actually read files in from the filesystem
+    FileReader = function() {
+        var that = this;
+        this.readAsDataURL = function() {
+            that.onload({
+                target: {
+                    result: "base64,dataforfile"
+                }
+            });
+        }
+    }
+    beforeEach(function() {
+        jasmine.Ajax.useMock();
+        var Product = Backbone.Model.CouchDB.extend({
+            urlRoot: "/products"
+        });
+        product = new Product(productJSON, {
+            parse: true
+        })
+    })
+
+    it("should save with no Attachments when no files have been added", function() {
+        product.save();
+        var request = mostRecentAjaxRequest();
+        expect(Object.keys(JSON.parse(request.params)._attachments).length).toEqual(0)
+    })
+
+    it("should save the correct 2 Attachments when 2 files have been added", function() {
+        var attachment1 = product.get("_attachments").at(0);
+        var attachment2 = product.get("_attachments").at(2);
+        attachment1.updateBinary(file);
+        attachment2.updateBinary(file2);
+        product.save();
+        var request = mostRecentAjaxRequest();
+        var result = JSON.parse(request.params)
+        expect(Object.keys(result._attachments).length).toEqual(2)
+        expect(result._attachments["large-3"]).toBeDefined();
+        expect(result._attachments["dislay-3"]).not.toBeDefined();
+        expect(result._attachments["medium-3"]).toBeDefined();
+    })
+
+    it("should save using PUT when a file has been added to an existing model", function() {
+        var attachment1 = product.get("_attachments").at(0);
+        attachment1.updateBinary(file);
+        product.save()
+        var request = mostRecentAjaxRequest();
+        expect(request.method).toEqual("PUT")
+    })
+
+    it("should save using POST when a new model is created", function() {
+        var Person = Backbone.Model.CouchDB.extend({
+            urlRoot: '/people'
+        })
+
+        var person = new Person();
+        person.save();
+        var request = mostRecentAjaxRequest();
+        expect(request.method).toEqual("POST");
+
+    })
+})
+
+describe("CouchDB Views", function() {
+    var product, modelView;
     beforeEach(function() {
         var Product = Backbone.Model.CouchDB.extend({
             urlRoot: "/products"
@@ -86,14 +151,31 @@ describe("Saving Attachments", function() {
         product = new Product(productJSON, {
             parse: true
         })
-        spyOn(window, 'FileReader').andReturn(fileReader);
+        var ModelView = Backbone.View.CouchDB.extend({})
+        var AttachmentView = Backbone.View.extend({
+            className: 'image_attachment'
+        })
+
+        modelView = new ModelView({
+            model: product,
+            attachmentView: AttachmentView
+        })
     })
 
-    it("should save with no Attachments when no files have been added", function() {
-        jasmine.Ajax.useMock();
-        product.save();
-        var request = mostRecentAjaxRequest();
-        expect(Object.keys(JSON.parse(request.params)._attachments).length).toEqual(0)
+    it("should render a view", function() {
+        var element = modelView.buildAttachments()
+        expect(element).toHaveHtml('<div id="large-3" class="image_attachment"></div><div id="display-3" class="image_attachment"></div><div id="medium-3" class="image_attachment"></div>')
     })
-    it("")
+
+    it("should render add a new attachment to view", function() {
+        // We have to create a drop event so we can programmatically
+        // emulate the dropping of a file onto the element
+        var evt = document.createEvent('Event');
+        evt.initEvent('drop', true, true)
+        var element = modelView.buildAttachments()
+        modelView.addAttachment();
+        var added_element = $(element).children()[2]
+        added_element.dispatchEvent(evt, true)
+        
+    })
 })
