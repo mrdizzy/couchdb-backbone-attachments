@@ -62,15 +62,15 @@ describe("Attachments", function() {
     });
 
     it("should have an Attachments collection", function() {
-        expect(product.get("_attachments").length).toEqual(3);
+        expect(product._attachments.length).toEqual(3);
     });
 
     it("should have an Attachment with the correct url", function() {
-        expect(product.get("_attachments").at(0).url()).toEqual('/products/eloquence-name_place/attachments/large-3')
+        expect(product._attachments.at(0).url()).toEqual('/products/eloquence-name_place/attachments/large-3')
     })
 
     it("should update the Attachment's content_type attribute when adding a file", function() {
-        var attachment = product.get("_attachments").at(0);
+        var attachment = product._attachments.at(0);
         expect(attachment.get("content_type")).toBe("image/png")
         attachment.updateBinary(file);
         expect(attachment.get("content_type")).toBe("text/plain")
@@ -92,6 +92,7 @@ describe("Saving Attachments", function() {
         }
     }
     beforeEach(function() {
+
         jasmine.Ajax.useMock();
         var Product = Backbone.Model.CouchDB.extend({
             urlRoot: "/products"
@@ -108,8 +109,8 @@ describe("Saving Attachments", function() {
     })
 
     it("should save the correct 2 Attachments when 2 files have been added", function() {
-        var attachment1 = product.get("_attachments").at(0);
-        var attachment2 = product.get("_attachments").at(2);
+        var attachment1 = product._attachments.at(0);
+        var attachment2 = product._attachments.at(2);
         attachment1.updateBinary(file);
         attachment2.updateBinary(file2);
         product.save();
@@ -122,7 +123,7 @@ describe("Saving Attachments", function() {
     })
 
     it("should save using PUT when a file has been added to an existing model", function() {
-        var attachment1 = product.get("_attachments").at(0);
+        var attachment1 = product._attachments.at(0);
         attachment1.updateBinary(file);
         product.save()
         var request = mostRecentAjaxRequest();
@@ -143,9 +144,9 @@ describe("Saving Attachments", function() {
 })
 
 describe("CouchDB Views", function() {
-    var product, modelView;
+    var product, modelView, Product;
     beforeEach(function() {
-        var Product = Backbone.Model.CouchDB.extend({
+       Product = Backbone.Model.CouchDB.extend({
             urlRoot: "/products"
         });
         product = new Product(productJSON, {
@@ -167,15 +168,42 @@ describe("CouchDB Views", function() {
         expect(element).toHaveHtml('<div id="large-3" class="image_attachment"></div><div id="display-3" class="image_attachment"></div><div id="medium-3" class="image_attachment"></div>')
     })
 
-    it("should render add a new attachment to view", function() {
+    it("should add a new attachment view on an existing model and update that attachment", function() {
+        jasmine.Ajax.useMock();
+        var element = modelView.buildAttachments()
+        modelView.addAttachment();
+        var added_element = $(element).children()[3]
+
         // We have to create a drop event so we can programmatically
         // emulate the dropping of a file onto the element
         var evt = document.createEvent('Event');
         evt.initEvent('drop', true, true)
+        evt.dataTransfer = {
+            files: [file]
+        }
+        added_element.dispatchEvent(evt, true)
+        product.save();
+        var request = mostRecentAjaxRequest();
+    })
+
+    it("should render add a new attachment view and update that attachment correctly", function() {
+        jasmine.Ajax.useMock();
+        product = new Product();
+        modelView.model = product;
         var element = modelView.buildAttachments()
         modelView.addAttachment();
-        var added_element = $(element).children()[2]
+        var added_element = $(element).children()[0]
+        console.log(added_element)
+        // We have to create a drop event so we can programmatically
+        // emulate the dropping of a file onto the element
+        var evt = document.createEvent('Event');
+        evt.initEvent('drop', true, true)
+        evt.dataTransfer = {
+            files: [file]
+        }
         added_element.dispatchEvent(evt, true)
-        
+        product.save();
+        var request = mostRecentAjaxRequest();
+        console.log(request.params)
     })
 })

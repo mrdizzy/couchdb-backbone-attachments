@@ -2,7 +2,8 @@ Backbone.Model.Attachment = Backbone.Model.extend({
     updateBinary: function(file) {
         this.set("binary", file)
         this.set("content_type", file.type)
-    }
+    },
+    parent: function() { console.log(this.options); return this.belongs_to }
     // Overwrite the Backbone.sync method for CREATE and UPDATE calls
     // as we want to send just the binary data of the attachment
     // We shouldn't concern ourselves with GETting the attachment as 
@@ -33,9 +34,12 @@ Backbone.Collection.Attachments = Backbone.Collection.extend({
 })
 
 Backbone.Model.CouchDB = Backbone.Model.extend({
-    defaults: {
-        "_attachments": new Backbone.Collection.Attachments,
-        "attachments_order": []
+    constructor: function(attributes, options) {
+        this._attachments = new Backbone.Collection.Attachments;
+        Backbone.Model.apply(this,arguments)
+    },
+    addNewAttachment: function() {
+      this._attachments.add({})
     },
     // We overwrite the parse function as when attachments come down the 
     // wire we need to parse them out into a separate Backbone collection
@@ -60,14 +64,10 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
                 length: list[key].length,
             }
         }, this)
-        if (this.get("_attachments") instanceof Backbone.Collection.Attachments) {
-            resp._attachments = this.get("_attachments").reset(parsed_attachments)
-        }
-        else {
-            resp._attachments = new Backbone.Collection.Attachments(parsed_attachments)
-
-        }
-        resp._attachments.url = this.url() + "/" + resp._id + "/attachments"
+            this._attachments.reset(parsed_attachments)           
+        
+        this._attachments.url = this.url() + "/" + resp._id + "/attachments"
+        resp.attachments_order = resp.attachments_order || []
         return resp;
     },
 
@@ -94,8 +94,9 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
     // save our model to the server.
     saveForCouchDB: function(callback) {
         var json = _.clone(this.attributes);
+        if(this._attachments.length > 0) {
         json._attachments = {};
-        var attachments = this.get("_attachments").filter(function(attachment) {
+        var attachments = this._attachments.filter(function(attachment) {
             return attachment.get("binary");
         });
         // If no files have been added to the model then we return straight away
@@ -106,11 +107,9 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
         // We need to use a counter as loading of the files is asynchronous
         // and we do not want to return until they are all loaded
         var counter = 0;
-        console.log(attachments);
         _.each(attachments, function(attachment) {
 
             var fReader = new FileReader();
-            console.log(fReader)
             fReader.onload = function(event) {
 
                 counter++;
@@ -120,18 +119,21 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
                     data: data
                 }
                 if (counter == attachments.length) {
-
                     callback(json);
                 }
             }
             fReader.readAsDataURL(attachment.get("binary"))
         })
+        }
+        else { callback(json) }
     },
     idAttribute: "_id"
 });
 
-
-function makeDroppable(el, model) {
+// Takes the Attachment View and makes it into a droppable element
+// and provides a callback to be executed when a file is dropped
+// on that element
+function makeDroppable(el, attachment, parent) {
     // We need this to prevent the browser using its standard default when you drag over
     el.addEventListener('dragover', function(e) {
         e.preventDefault();
@@ -141,11 +143,13 @@ function makeDroppable(el, model) {
     // and then get the file, set the binary data of the attachment
     // and save it
     el.addEventListener('drop', function(e) {
-        console.log("DROPPED")
+        console.log("DROPPED", e)
         e.preventDefault();
         var file = e.dataTransfer.files[0];
 
-        model.set("binary", file);
+        attachment.set({binary: file, content_type: file.type, id: file.name});
+       // parent.set("attachments_order", parent.get("attachments_order".push()))
+        console.log("here", attachment.parent())
         // model.save();
         $('img').remove()
         $('<img>').attr('title', file.name).attr('src', this.result).css('width', '50px').appendTo(el);
@@ -156,7 +160,7 @@ function makeDroppable(el, model) {
 
 Backbone.View.Attachments = Backbone.View.extend({
     initialize: function() {
-        this.model.get("_attachments").on("add", this.addAttachment, this)
+        this.model._attachments.on("add", this.addAttachment, this)
     },
     // addAttachment is called whenever the addAttachment() method from the 
     // parent view class (below) is called. 
@@ -167,6 +171,7 @@ Backbone.View.Attachments = Backbone.View.extend({
             },
             model: model
         });
+        makeDroppable(v.el, model, this.model)
         v.listenTo(model, 'destroy', v.remove)
         this.$el.append(v.render().el)
     },
@@ -179,9 +184,9 @@ Backbone.View.Attachments = Backbone.View.extend({
                 attributes: {
                     id: key
                 },
-                model: that.model.get("_attachments").get(key)
+                model: that.model._attachments.get(key)
             }).render()
-            makeDroppable(subview.el, that.model.get("_attachments").get(key))
+            makeDroppable(subview.el, that.model._attachments.get(key), that.model)
             that.$el.append(subview.el);
         })
         return this;
@@ -194,7 +199,7 @@ Backbone.View.Attachments = Backbone.View.extend({
 Backbone.View.CouchDB = Backbone.View.extend({
     // 
     addAttachment: function() {
-        this.model.get("_attachments").add({})
+        this.model.addNewAttachment()
     },
 
     // Extend this view and then call buildAttachments(view) from within the 
