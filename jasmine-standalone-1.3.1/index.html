@@ -10,7 +10,110 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/0.9.10/backbone-min.js"
         type="text/javascript"></script>
         <script type="text/javascript" src="src/attachments.js"></script>
-    
+        <script type="text/javascript">
+            var Product = Backbone.Model.CouchDB.extend({
+                urlRoot: "/products",
+                attachment_types: ["large","small","medium"]
+            })
+             var product = new Product({
+                "_id": "eloquence-name_place",
+                "_rev": "45-cdc938e06e1c43598730833e9334a8ff",
+                "type": "product",
+                "colours": ["MidnightBlue"],
+                "attachments_order": [1, 5, 2],
+                "_attachments": {
+                    "1-large": {
+                        "content_type": "image/png",
+                        "revpos": 41,
+                        "digest": "md5-GL1fjZJ04GPEqPX9rQVgLg==",
+                        "length": 108675,
+                        "stub": true
+                    },
+                    "1-small": {
+                        "content_type": "image/png",
+                        "revpos": 40,
+                        "digest": "md5-9PpBHtjqHQprDoUjN76Ang==",
+                        "length": 34865,
+                        "stub": true
+                    },
+                    "1-medium": {
+                        "content_type": "image/png",
+                        "revpos": 39,
+                        "digest": "md5-wER52KdJVAWQ7Gu4wvnDPw==",
+                        "length": 68409,
+                        "stub": true
+                    },
+                    "2-large": {
+                        "content_type": "image/png",
+                        "revpos": 41,
+                        "digest": "md5-GL1fjZJ04GPEqPX9rQVgLg==",
+                        "length": 108675,
+                        "stub": true
+                    },
+                    "2-small": {
+                        "content_type": "image/png",
+                        "revpos": 40,
+                        "digest": "md5-9PpBHtjqHQprDoUjN76Ang==",
+                        "length": 34865,
+                        "stub": true
+                    },
+                    "2-medium": {
+                        "content_type": "image/png",
+                        "revpos": 39,
+                        "digest": "md5-wER52KdJVAWQ7Gu4wvnDPw==",
+                        "length": 68409,
+                        "stub": true
+                    },
+                    "5-large": {
+                        "content_type": "image/png",
+                        "revpos": 41,
+                        "digest": "md5-GL1fjZJ04GPEqPX9rQVgLg==",
+                        "length": 108675,
+                        "stub": true
+                    },
+                    "5-small": {
+                        "content_type": "image/png",
+                        "revpos": 40,
+                        "digest": "md5-9PpBHtjqHQprDoUjN76Ang==",
+                        "length": 34865,
+                        "stub": true
+                    },
+                    "5-medium": {
+                        "content_type": "image/png",
+                        "revpos": 39,
+                        "digest": "md5-wER52KdJVAWQ7Gu4wvnDPw==",
+                        "length": 68409,
+                        "stub": true
+                    }
+                }
+            }, {
+                parse: true
+            })
+            
+            var AttachmentView = Backbone.View.Attachment.extend({
+                render: function() {
+                    this.$el.html(this.model.id)
+                    return this;
+                }
+            })
+            var ProductView = Backbone.View.CouchDB.extend({
+              
+                render: function() {
+                    this.$el.html(this.buildAttachments())
+                    return this;
+                }
+            })
+            
+            var product_view = new ProductView({model: product, attachmentView: AttachmentView})
+            console.log(product_view.render().el)
+            $(function() {
+            $('#container').append(product_view.render().el)}
+            )
+        </script>
     </head>
     
+    <body>
+        <div id="container"></div>
+    </body>
+
 </html>

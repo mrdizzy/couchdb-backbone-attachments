@@ -1,4 +1,11 @@
 Backbone.Model.Attachment = Backbone.Model.extend({
+    updateBinary: function(file) {
+        this.set({
+            binary: file,
+            content_type: file.type,
+            id: file.name
+        });
+    }
 })
 
 Backbone.Collection.Attachments = Backbone.Collection.extend({
@@ -9,7 +16,6 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
     constructor: function(attributes, options) {
         this._attachments = new Backbone.Collection.Attachments;
         this.attachments_order = [];
-        
         Backbone.Model.apply(this, arguments)
     },
     // We overwrite the parse function as when attachments come down the 
@@ -30,21 +36,15 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
         this.attachments_order = resp.attachments_order
         return resp;
     },
-    
-    addAttachmentGroup: function() {
-        var max = this._attachments.max(function(attachment) {
-            var split = attachment.id.split("-");
-            return split[0];
-        })
-        var new_id = parseInt(max.id.split("-")[0]) + 1;
 
-        this.attachment_types.forEach(function(type) {
-            this._attachments.add({
-                id: new_id + "-" + type
-            })
-        }, this)
-        this._attachments.trigger("add-group", new_id)
-    },    
+    // We call this to save the order of attachments to the server
+    updateAttachmentsOrder: function(new_order) {
+        this.save({
+            "attachments_order": new_order
+        }, {
+            patch: true
+        });
+    },
     sync: function() {
         var xhr, args = arguments;
 
@@ -98,90 +98,127 @@ Backbone.Model.CouchDB = Backbone.Model.extend({
     idAttribute: "_id"
 });
 
-/////////////////////////////////////////////////////////////////////////////////
+/////////////////
 // VIEWS
-/////////////////////////////////////////////////////////////////////////////////
+/////////////////
 
 Backbone.View.Attachment = Backbone.View.extend({
     constructor: function() {
-        var that = this;
         Backbone.View.apply(this, arguments)
+        var that = this;
         this.el.addEventListener('dragover', function(e) {
             e.preventDefault();
         });
 
-        // Listen for a file to be dropped on the element and then get the file, set the 
-        // binary data of the attachment and save it
-        this.el.addEventListener('drop', function(e) {
-            e.preventDefault();
-            var file = e.dataTransfer.files[0];
-            that.model.set({
-                binary: file,
-                content_type: file.type,
-                id: e.srcElement.id
-            });
-        });
+        makeDroppable(this.el, this.model)
+        this.listenTo(this.model, "change:id", function(model) {
+            that.$el.attr('id', model.id)
+            model.collection.trigger('update-id')
+        })
         this.listenTo(this.model, "destroy", this.remove);
     }
 })
 
 Backbone.View.Attachments = Backbone.View.extend({
     initialize: function() {
-        this.model._attachments.on("add-group", this.addAttachmentGroup, this)
+        this.model._attachments.on("add", this.addAttachment, this)
+        if(!this.model.attachment_types) {
+        this.model._attachments.on("update-id", this.updateAttachments, this)
+        
+        }
     },
     updateAttachments: function() {
         this.model.set("attachments_order", this.$el.sortable("toArray"))
     },
     // addAttachment is called with an instance of the new attachment model
     // whenever the addAttachment() method from the parent view class is called. 
-    addAttachmentGroup: function(id) {
-        this.$el.append(this._renderGroup(id))
+    addAttachment: function(attachment) {
+        var attachment_view = new this.options.view({
+            attributes: {
+                id: attachment.cid
+            },
+            model: attachment
+        });
+        this.$el.append(attachment_view.render().el)
     },
     render: function() {
         var that = this;
         this.$el.empty();
         this.model.attachments_order.forEach(function(key) {
-            this.$el.append(this._renderGroup(key));
-        }, this)
-                this.$el.sortable()
-        this.$el.bind("update", function(event, ui) {
-            that.model.updateAttachmentsOrder($(this).sortable("toArray"));
+            // Handle groups of attachments
+            if (typeof key == "number") {
+                var these_attachments_el = $('<div></div>', { id: key});
+                that.model.attachment_types.forEach(function(type) {
+                    var attachment_id = key + "-" + type;
+                    var attachment = that.model._attachments.get(attachment_id);
+                  
+                    var subview = new that.options.view({
+                        attributes: {
+                            id: attachment_id
+                        },
+                        model: attachment
+                    }).render()
+                    makeDroppable(subview.el, attachment)
+                    these_attachments_el.append(subview.el);
+                })
+                that.$el.append(these_attachments_el);
+            }
+            // Handle single attachments
+            else {
+                var subview = new that.options.view({
+                    attributes: {
+                        id: key
+                    },
+                    model: that.model._attachments.get(key)
+                }).render()
+                makeDroppable(subview.el, that.model._attachments.get(key), that.model)
+                that.$el.append(subview.el);
+            }
         })
         return this;
-    },    
-    _renderGroup: function(id) {
-        var these_attachments_el = $('<div></div>', {
-            id: id
-        });
-        this.model.attachment_types.forEach(function(type) {
-            var attachment_id = id + "-" + type;
-            var attachment = this.model._attachments.get(attachment_id);
-
-            var subview = new this.options.view({
-                attributes: {
-                    id: attachment_id
-                },
-                model: attachment
-            }).render()
-            these_attachments_el.append(subview.el);
-        }, this)
-        return these_attachments_el
     }
 })
 
 Backbone.View.CouchDB = Backbone.View.extend({
     addAttachment: function() {
-       this.model.addAttachmentGroup();
+        this.model._attachments.add()
     },
     // Extend this view and then call buildAttachments(view) from within the 
     // extended view's render() method, passing it an extended Backbone view
     // to render each individual attachment. 
     buildAttachments: function() {
+        var that = this;
         var attachments_collection_view = new Backbone.View.Attachments({
             model: this.model,
-            view: this.options.attachmentView
+            view: that.options.attachmentView
         })
-        var attachments_view_element = attachments_collection_view.render().el
+        var attachments_view_element = attachments_collection_view.render().$el
+        attachments_view_element.sortable({
+            update: function(event, ui) {
+                that.model.updateAttachmentsOrder($(this).sortable("toArray"));
+            }
+        })
         return attachments_view_element
     }
 })
+
+////////////////
+// HELPERS 
+////////////////
+
+// Takes the Attachment View and makes it into a droppable element and provides a callback 
+// to be executed when a file is dropped on that element
+function makeDroppable(el, attachment) {
+    // We need this to prevent the browser using its standard default when you drag over
+    el.addEventListener('dragover', function(e) {
+        e.preventDefault();
+    });
+
+    // Listen for a file to be dropped on the element and then get the file, set the 
+    // binary data of the attachment and save it
+    el.addEventListener('drop', function(e) {
+        e.preventDefault();
+        console.log("SRC", e.srcElement)
+        attachment.updateBinary(e.dataTransfer.files[0]);
+    });
+}
